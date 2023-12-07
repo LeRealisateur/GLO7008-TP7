@@ -1,14 +1,14 @@
 on:
   push:
     branches:
-      - master
+      - main
 name: changelog
 jobs:
-  get_changelogs: #######
-    name: Get Added Changelog Files
+  get_changelogs:
+    name: Get Added Changelog
     runs-on: ubuntu-latest
-    outputs: #######
-      added_changelogs: ${{ steps.diff_changelogs.outputs.added_changelogs }}
+    outputs:
+      added: ${{ steps.diff_changelogs.outputs.added }}
     steps:
       - uses: actions/checkout@v2
         with:
@@ -19,35 +19,13 @@ jobs:
         if: ${{ steps.files.outputs.added }}
         run: |
           ADDED=$(echo ${{ steps.files.outputs.added }})
-          FORMATED=$(echo $ADDED | tr ' ' '\n')
-          REGX='^(changelog)/(\w+\.json)$'
-          FILTERED=$(echo $FORMATED | grep -E $REGX)
-          echo "Detected added changelogs: $FILTERED"
+          FILTERED=$(echo $ADDED | tr ' ' '\n' | grep -E '^(changelog)/(\w+\.json)$') # only catch changelog/*.json files
+          echo "Detected changelog update: $FILTERED"
           echo "added=$FILTERED" >> $GITHUB_OUTPUT
   notify:
     needs: get_changelogs
-    if: ${{ needs.get_changelogs.outputs.added }}
-    name: Send Changelog Notifications
-      env:
-        SECURITY: ${{ secrets.TEAMS_WH_SECURITY }}
-        SUPPORT: ${{ secrets.TEAMS_WH_SUPP }}
-      run: |
-        TEMPLATE_PATH="changelog/.template/default.j2"
-        HEADER='Content-type: applications/json'
-        FILTERED=${{ needs.get_changelogs.outputs.added }}
-        echo "Detected changelog update: $FILTERED"
-        for FILE in $FILTERED; do
-          echo "Processing changelog: $FILE"
-          CHANNELS=$(jq -r '.notify[]' $FILE)
-          echo "Found channels: $CHANNELS"
-
-          for CHANNEL in $CHANNELS; do
-            echo "Sending notifications to $CHANNEL"
-            URL=$(eval "echo \$$CHANNEL")
-            echo "Webhook URL: $URL"
-            jinja -u debug -d "$FILE" "$TEMPLATE_PATH" | curl -X POST -H "$HEADERS" --data @- "$URL"
-          done
-        done
+    if: ${{ needs.get_changelogs.outputs.added}}
+    name: Send ChangeLog Notifications
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -55,7 +33,29 @@ jobs:
         with:
           python-version: '3.10'
       - name: setup
-        run: | 
+        run: |
           sudo apt-get install jq
           pip install pathlib
           pip install jinja-cli
+      - name: Send ChangeLog Notifications
+        env:
+          SECURITY: ${{ secrets.TEAMS_WH_SECURITY }}
+          SUPPORT: ${{ secrets.TEAMS_WH_SUPPORT }}
+        run: |
+          TEMPLATE_PATH="changelog/.template/default.j2"
+          HEADERS='Content-type: application/json'
+          FILTERED=${{ needs.get_changelogs.outputs.added }}
+          echo "Detected changelog update: $FILTERED"
+
+          for FILE in $FILTERED; do
+            echo "Processing changelog: $FILE"
+            CHANNELS=$(jq -r '.notify[]' $FILE)
+            echo "Found channels: $CHANNELS"
+
+            for CHANNEL in $CHANNELS; do
+              echo "Sending notification to $CHANNEL"
+              URL=$(eval "echo \$$CHANNEL")
+              echo "Webhook URL: $URL"
+              jinja -u debug -d "$FILE" "$TEMPLATE_PATH" | curl -X POST -H "$HEADERS" --data @- "$URL"
+            done
+          done
