@@ -8,7 +8,7 @@
     "John Doe (john@kheops.dev)"
   ],
   "schedule": {
-    "start": "Mercredi 30 Novembre 8:00",
+    "start": "Mercredi 30 Novembre 9:00",
     "end": "Mercredi 30 Novembre 12:00"
   },
   "recommendations": "Monitorer l'état des services, rollback si besoin...",
